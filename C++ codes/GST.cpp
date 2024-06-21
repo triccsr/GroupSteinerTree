@@ -6,7 +6,9 @@
 #include <ctime>
 #include <cstdint>
 #include <cstdlib>
+#include <map>
 #include <numeric>
+#include <set>
 #include <string>
 #include <list>
 #include <vector>
@@ -436,7 +438,7 @@ graph_hash_of_mixed_weighted LANCET(graph_hash_of_mixed_weighted& G_t, std::unor
 
 
 	/*push distances between vertices in V2 and vertices in V1 into Q; maximal num of elements: |T|;
-	the time complexity of inserting elements for fibonacci_heap is ¦¨(1)*/
+	the time complexity of inserting elements for fibonacci_heap is ï¿½ï¿½(1)*/
 	node_for_LANCET node;
 	boost::heap::fibonacci_heap<node_for_LANCET> Q;
 	std::unordered_map<int, double> Q_keys;
@@ -2243,6 +2245,7 @@ void read_Movielens_25m(graph_hash_of_mixed_weighted& read_graph, graph_hash_of_
 					if (genres_ids.count(genres[i]) == 0) {
 						int genre_id = genres_ids.size() + group_ID_start;
 						genres_names[genre_id] = genres[i];
+						std::cout<<genre_id<<"'s name is \""<<genres[i]<<"\"."<<std::endl;
 						genres_ids[genres[i]] = genre_id;
 					}
 					int genre_id = genres_ids[genres[i]];
@@ -2334,7 +2337,64 @@ void solve_VWGSTP(string data_name, string save_name, int iteration_times, int V
 	}
 	graph_hash_of_mixed_weighted_nw_ec_normalization(read_graph);
 
+	//Added by Sirui Chen, output new graph
+	ofstream graphFile;
+	std::map<int,int> vMap;
+	graphFile.open(data_name+"_graph.txt");
+	ofstream mapFile(data_name+"_vertices_map.txt");
 
+	if(graphFile.is_open()&&mapFile.is_open()){
+		int vIndex=0;	
+		graphFile.precision(10);
+		graphFile<< graph_hash_of_mixed_weighted_num_vertices(read_graph)<<" "<< graph_hash_of_mixed_weighted_num_edges(read_graph)<< endl;
+		for (auto it1 = read_graph.hash_of_vectors.begin(); it1 != read_graph.hash_of_vectors.end(); it1++) {
+			int i = it1->first;
+			if(vMap.count(i)==0){
+				vMap.insert(make_pair(i,++vIndex));
+				mapFile<<vIndex<<" "<<i<<endl;
+			}
+			auto search = read_graph.hash_of_hashs.find(i);
+			if (search != read_graph.hash_of_hashs.end()) {
+				for (auto it2 = search->second.begin(); it2 != search->second.end(); it2++) {
+					int j = it2->first;
+					if (i < j) { // edge (i,j)
+						
+						if(vMap.count(j)==0){
+							vMap.insert(make_pair(j,++vIndex));
+							mapFile<<vIndex<<" "<<j<<endl;
+
+						}
+						double c_ij = it2->second;
+						graphFile<<vMap[i]<<" "<<vMap[j]<<" "<<c_ij<<std::endl;
+					}
+				}
+			}
+			else {
+				auto search2 = read_graph.hash_of_vectors.find(i);
+				for (auto it2 = search2->second.adj_vertices.begin(); it2 != search2->second.adj_vertices.end(); it2++) {
+					int j = it2->first;
+					if (i < j) { // edge (i,j)
+						if(vMap.count(j)==0){
+							vMap.insert(make_pair(j,++vIndex));
+							mapFile<<vIndex<<" "<<j<<endl;
+						}
+						double c_ij = it2->second;
+						graphFile<<vMap[i]<<" "<<vMap[j]<<" "<<c_ij<<std::endl;
+					}
+				}
+			}
+		}
+		graphFile.close();
+
+	}
+	else{
+		std::cerr<<"Error: Cannot open graph file or map file"<<endl;
+		assert(0);
+	}
+
+	ofstream groupFile(data_name+"_groups.txt");
+
+	std::unordered_map<int,std::set<int> > groups;
 
 	/*find cpn and skill_vertices*/
 	std::list<std::list<int>> cpn = graph_hash_of_mixed_weighted_connected_components(read_graph);
@@ -2346,6 +2406,7 @@ void solve_VWGSTP(string data_name, string save_name, int iteration_times, int V
 			for (auto it2 = search->second.begin(); it2 != search->second.end(); it2++) {
 				int skill_vertex = it2->first;
 				read_graph_skill_vertices.insert(skill_vertex);
+				groups[skill_vertex].insert(v);
 			}
 		}
 		else {
@@ -2353,10 +2414,26 @@ void solve_VWGSTP(string data_name, string save_name, int iteration_times, int V
 			for (auto it2 = search3->second.adj_vertices.begin(); it2 != search3->second.adj_vertices.end(); it2++) {
 				int skill_vertex = it2->first;
 				read_graph_skill_vertices.insert(skill_vertex);
+				groups[skill_vertex].insert(v);
 			}
 		}
 	}
 
+	if(groupFile.is_open()){// groups.txt. FORMAT: GROUP_NAME  memberVertexID1 memberVertexID2 ...
+		for(auto it=groups.begin();it!=groups.end();++it){
+			groupFile<<it->first<<"  ";
+			for(auto setIt=it->second.begin();setIt!=it->second.end();++setIt){
+				groupFile<<vMap[*setIt]<<" ";
+			}
+			groupFile<<endl;
+		}
+		groupFile.close();
+	}
+	else{
+		std::cerr<<"Error: Cannot open group File"<<endl;
+		assert(0);
+	}
+	return;//dfjdkjfk
 
 	//cout << "cpn.size():" << cpn.size() << endl;
 	//std::list<int> max_cpn;
@@ -2382,8 +2459,15 @@ void solve_VWGSTP(string data_name, string save_name, int iteration_times, int V
 		std::unordered_set<int> sampled_skill_vertices;
 		bool sampled_skill_vertices_is_feasible = false;
 
+		ofstream queryFile(data_name+"_query.txt"),queryGroupFile(data_name+"query_group.txt");
 
+		if(!queryFile.is_open()||!queryGroupFile.is_open()){
+			std::cerr<<"Error: Cannot open query files"<<endl;
+			assert(0);
+		}
+		
 		if (V < read_graph.hash_of_vectors.size()) {
+			assert(false); //Added by Sirui Chen
 			unordered_set<int> selected_vertices = graph_hash_of_mixed_weighted_breadth_first_search_a_fixed_number_of_vertices_in_unconnected_graphs_start_from_maxcpn(read_graph, V);
 			graph_hash_of_mixed_weighted small_read_graph = graph_hash_of_mixed_weighted_extract_subgraph_for_a_hash_of_vertices(read_graph, selected_vertices);
 
@@ -2430,6 +2514,9 @@ void solve_VWGSTP(string data_name, string save_name, int iteration_times, int V
 			}
 		}
 
+
+
+		continue; //Add by Sirui Chen, now I only need to generate graph and skill vertices
 
 		/*solve instance in each maximal component*/
 		double time_DPBF = 0, time_ENSteiner = 0, time_IhlerA = 0, time_exENSteiner = 0, time_exIhlerA = 0, time_FastAPP = 0, time_fastAPP2 = 0,
@@ -3166,7 +3253,7 @@ void parallel_experiments() {
 
 
 	/*Movie main size; 17 threads*/
-	if (1) {
+	if (0) {
 		int iteration_times = 100;
 		int V = 62423;
 		int h = 3;
@@ -3175,9 +3262,12 @@ void parallel_experiments() {
 		double maximum_return_app_ratio = 1;
 		bool use_ENSteiner = false, use_IhlerA = false, use_exIhlerA = false, use_PartialOPT = false, use_DPBF = true, use_Basic = true, use_BasicPlus = true;
 
+		const int inf=0x3f3f3f3f;
+		solve_VWGSTP("movielens_25m","GEN_solve_VWGSTP_movielens.csv",10,inf,T,lambda,h,maximum_return_app_ratio,
+				use_ENSteiner, use_IhlerA, true, use_exIhlerA, true, 0, true, use_PartialOPT, use_DPBF, use_Basic, use_BasicPlus, true);
 
 		/*size V*/
-		if (1) {
+		if (0) {
 			use_exIhlerA = true, use_PartialOPT = true;
 			threads.emplace_back(solve_VWGSTP, "movielens_25m", "EXP_solve_VWGSTP_movielens_size_V_1.csv", iteration_times, 2000, T, lambda, h, maximum_return_app_ratio,
 				use_ENSteiner, use_IhlerA, true, use_exIhlerA, true, 0, true, use_PartialOPT, use_DPBF, use_Basic, use_BasicPlus, false);
@@ -3201,7 +3291,7 @@ void parallel_experiments() {
 		}
 
 		/*size T*/
-		if (1) {
+		if (0) {
 			threads.emplace_back(solve_VWGSTP, "movielens_25m", "EXP_solve_VWGSTP_movielens_size_T_1.csv", iteration_times, V, 4, lambda, h, maximum_return_app_ratio,
 				use_ENSteiner, use_IhlerA, true, use_exIhlerA, true, 0, true, use_PartialOPT, use_DPBF, use_Basic, use_BasicPlus, false);
 			threads.emplace_back(solve_VWGSTP, "movielens_25m", "EXP_solve_VWGSTP_movielens_size_T_2.csv", iteration_times, V, 5, lambda, h, maximum_return_app_ratio,
@@ -3213,7 +3303,7 @@ void parallel_experiments() {
 		}
 
 		/*size lambda*/
-		if (1) {
+		if (0) {
 			threads.emplace_back(solve_VWGSTP, "movielens_25m", "EXP_solve_VWGSTP_movielens_size_lambda_1.csv", iteration_times, V, T, 0, h, maximum_return_app_ratio,
 				use_ENSteiner, use_IhlerA, true, use_exIhlerA, true, 0, true, use_PartialOPT, use_DPBF, use_Basic, use_BasicPlus, false);
 			threads.emplace_back(solve_VWGSTP, "movielens_25m", "EXP_solve_VWGSTP_movielens_size_lambda_2.csv", iteration_times, V, T, 0.67, h, maximum_return_app_ratio,
@@ -3228,6 +3318,18 @@ void parallel_experiments() {
 		threads.emplace_back(solve_VWGSTP, "movielens_25m", "EXP_solve_VWGSTP_movielens_size_r_3.csv", iteration_times, V, T, lambda, h, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, true, true, false);
 
 	}
+
+	int iteration_times = 100;
+	int V = 62423;
+	int h = 3;
+	int T = 6;
+	double lambda = 0.33;
+	double maximum_return_app_ratio = 1;
+	bool use_ENSteiner = false, use_IhlerA = false, use_exIhlerA = false, use_PartialOPT = false, use_DPBF = true, use_Basic = true, use_BasicPlus = true;
+
+	const int inf=0x3f3f3f3f;
+	solve_VWGSTP("dblp_2498k","GEN_solve_VWGSTP_dblp_2498k.csv",10,inf,T,lambda,h,maximum_return_app_ratio,
+			use_ENSteiner, use_IhlerA, true, use_exIhlerA, true, 0, true, use_PartialOPT, use_DPBF, use_Basic, use_BasicPlus, true);
 
 
 	for (auto& th : threads)
