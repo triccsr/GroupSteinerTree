@@ -1,5 +1,5 @@
 // GST.cpp : This file contains the 'main' function. Program execution begins and ends there.
-
+#define READ_FROM_FILE
 #include <iostream>
 #include <iomanip>
 #include <fstream>
@@ -436,7 +436,7 @@ graph_hash_of_mixed_weighted LANCET(graph_hash_of_mixed_weighted& G_t, std::unor
 
 
 	/*push distances between vertices in V2 and vertices in V1 into Q; maximal num of elements: |T|;
-	the time complexity of inserting elements for fibonacci_heap is ¦¨(1)*/
+	the time complexity of inserting elements for fibonacci_heap is ï¿½ï¿½(1)*/
 	node_for_LANCET node;
 	boost::heap::fibonacci_heap<node_for_LANCET> Q;
 	std::unordered_map<int, double> Q_keys;
@@ -2299,7 +2299,50 @@ void read_Movielens_25m(graph_hash_of_mixed_weighted& read_graph, graph_hash_of_
 	cout << "num_edges(read_group_graph): " << graph_hash_of_mixed_weighted_num_edges(read_group_graph) << endl;
 
 }
-#pragma endregion read_Movielens_25m 
+#pragma endregion read_Movielens_25m
+
+#pragma region
+void read_graph_from_file(graph_hash_of_mixed_weighted& read_graph, graph_hash_of_mixed_weighted& read_group_graph,const string &graphFilePath,const string &groupFilePath){
+    ifstream graphFile(graphFilePath,ios::in);
+    if(!graphFile.is_open()){
+        std::cerr<<"Error: Cannot Find File"<<graphFilePath<<", program exits"<<endl;
+        exit(1);
+    }
+	
+	int n;
+	size_t m;
+	graphFile>>n>>m;
+	for(int i=1;i<=n;++i){ //Sirui Chen: some vertices have no edges adjacent
+		graph_hash_of_mixed_weighted_add_vertex(read_graph,i,0);
+	}
+	int u,v;
+	double w;
+	while(graphFile>>u>>v>>w){
+		graph_hash_of_mixed_weighted_add_edge(read_graph,u,v,w);
+	}
+
+	graphFile.close();
+	
+	ifstream groupFile(groupFilePath,ios::in);
+    if(!groupFile.is_open()){
+        std::cerr<<"Error: Cannot Find File"<<groupFilePath<<", program exits"<<endl;
+        exit(1);
+    }
+
+	string line;
+	while(getline(groupFile,line)){
+		std::vector<string> words=parse_string(line," ");
+		if(words.empty())continue;
+		int groupID=stoi(words[0]);
+		for(size_t i=1;i<words.size();++i){
+			int vID=stoi(words[i]);
+			graph_hash_of_mixed_weighted_add_edge(read_group_graph,vID,groupID,0);
+		}
+	}
+
+	groupFile.close();
+}
+#pragma endregion read_graph_from_file
 
 #pragma region
 void solve_VWGSTP(string data_name, string save_name, int iteration_times, int V, int T, double lambda, double h, double maximum_return_app_ratio,
@@ -2316,8 +2359,21 @@ void solve_VWGSTP(string data_name, string save_name, int iteration_times, int V
 		"cost_exIhlerA,time_exIhlerA,cost_FastAPP,time_FastAPP,cost_fastAPP2,time_fastAPP2,cost_ImprovAPP,time_ImprovAPP,cost_PartialOPT,time_PartialOPT,cost_exENSteinerP,time_exENSteinerP," <<
 		"cost_exIhlerAP,time_exIhlerAP,cost_FastAPPP,time_FastAPPP,cost_Basic,time_Basic,cost_BasicPlus,time_BasicPlus,maximum_return_app_ratio" << endl;
 
+	//input queries or sample skill vertices when reading from file
+#ifdef READ_FROM_FILE
+	ifstream qgFile(data_name+"_qg.txt",ios::in);
+	if(!qgFile.is_open()){
+		std::cerr<<"Error: Option READ_FROM_FILE is on, but cannot find file"<<data_name+"_qg.txt, exiting."<<endl;
+		exit(1);
+	}
+#endif
+
+
 	/*read raw dataset*/
 	graph_hash_of_mixed_weighted read_graph, read_group_graph;
+#ifdef READ_FROM_FILE
+	read_graph_from_file(read_graph,read_group_graph,data_name+"_graph.txt",data_name+"_groups.txt");
+#else
 	if (data_name == "dblp_2498k") {
 		std::unordered_set<int> group_vertices;
 		read_dblp_v12_2498k(read_graph, read_group_graph, group_vertices);
@@ -2333,7 +2389,7 @@ void solve_VWGSTP(string data_name, string save_name, int iteration_times, int V
 		read_Movielens_25m(read_graph, read_group_graph, movie_names, genres_names);
 	}
 	graph_hash_of_mixed_weighted_nw_ec_normalization(read_graph);
-
+#endif
 
 
 	/*find cpn and skill_vertices*/
@@ -2368,6 +2424,19 @@ void solve_VWGSTP(string data_name, string save_name, int iteration_times, int V
 	//cout << "max_cpn.size(): " << max_cpn.size() << endl;
 
 
+	//query file
+#ifdef READ_FROM_FILE
+	std::cerr<<"Info: Read from file mode is on, arguments V,T,vertex_groups_sample_method are useless in read from file mode."<<endl;
+	int fileQueryNum;
+	qgFile>>fileQueryNum;
+	std::cout<<fileQueryNum<<" queries in "<<data_name+"_qg.txt"<<endl;
+	if(iteration_times>fileQueryNum){
+		std::cerr<<"Warning: iteration time is larger than query file size."<<endl;
+	}
+	iteration_times=min(iteration_times,fileQueryNum);
+	std::cout<<"Use first "<<iteration_times<<" queries"<<endl;
+#endif
+
 	/*iterations*/
 	for (int times = 1; times <= iteration_times; times++) {
 
@@ -2382,7 +2451,14 @@ void solve_VWGSTP(string data_name, string save_name, int iteration_times, int V
 		std::unordered_set<int> sampled_skill_vertices;
 		bool sampled_skill_vertices_is_feasible = false;
 
-
+#ifdef READ_FROM_FILE
+		int sampleSize;
+		qgFile>>sampleSize;
+		for(int i=0,groupID;i<sampleSize;++i){
+			qgFile>>groupID;
+			sampled_skill_vertices.insert(groupID);
+		}
+#else
 		if (V < read_graph.hash_of_vectors.size()) {
 			unordered_set<int> selected_vertices = graph_hash_of_mixed_weighted_breadth_first_search_a_fixed_number_of_vertices_in_unconnected_graphs_start_from_maxcpn(read_graph, V);
 			graph_hash_of_mixed_weighted small_read_graph = graph_hash_of_mixed_weighted_extract_subgraph_for_a_hash_of_vertices(read_graph, selected_vertices);
@@ -2429,7 +2505,7 @@ void solve_VWGSTP(string data_name, string save_name, int iteration_times, int V
 				sampled_skill_vertices = randomly_sample_vertex_groups_by_sizes(T, read_graph_skill_vertices, read_group_graph); /*randomly sample vertex groups by sizes*/
 			}
 		}
-
+#endif
 
 		/*solve instance in each maximal component*/
 		double time_DPBF = 0, time_ENSteiner = 0, time_IhlerA = 0, time_exENSteiner = 0, time_exIhlerA = 0, time_FastAPP = 0, time_fastAPP2 = 0,
@@ -2654,6 +2730,10 @@ void solve_VWGSTP(string data_name, string save_name, int iteration_times, int V
 
 	}
 
+#ifdef READ_FROM_FILE
+	qgFile.close();
+#endif
+
 }
 #pragma endregion solve_VWGSTP
 
@@ -2668,8 +2748,19 @@ void solve_VWSTP(string data_name, string save_name, int iteration_times, int V,
 	outputFile.open(save_name);
 	outputFile << "V,T,lambda,cost_LANCET,time_LANCET,cost_GKA,time_GKA" << endl;
 
+#ifdef READ_FROM_FILE
+	ifstream qgFile(data_name+"_qg.txt",ios::in);
+	if(!qgFile.is_open()){
+		std::cerr<<"Error: cannot open query file "<<data_name+"_qg.txt, exiting"<<endl;
+		exit(1);
+	}
+#endif
+
 	/*read raw dataset*/
 	graph_hash_of_mixed_weighted read_graph, read_group_graph;
+#ifdef READ_FROM_FILE
+	read_graph_from_file(read_graph,read_group_graph,data_name+"_graph.txt",data_name+"_groups.txt");
+#else
 	if (data_name == "dblp_2498k") {
 		std::unordered_set<int> group_vertices;
 		read_dblp_v12_2498k(read_graph, read_group_graph, group_vertices);
@@ -2685,7 +2776,7 @@ void solve_VWSTP(string data_name, string save_name, int iteration_times, int V,
 		read_Movielens_25m(read_graph, read_group_graph, movie_names, genres_names);
 	}
 	graph_hash_of_mixed_weighted_nw_ec_normalization(read_graph);
-
+#endif
 
 
 	/*find cpn and skill_vertices*/
@@ -2709,6 +2800,18 @@ void solve_VWSTP(string data_name, string save_name, int iteration_times, int V,
 		}
 	}
 
+	//query file
+#ifdef READ_FROM_FILE
+	std::cerr<<"Info: Read from file mode is on, arguments V,T,lambda,vertex_groups_sample_method are useless in read from file mode."<<endl;
+	int fileQueryNum;
+	qgFile>>fileQueryNum;
+	std::cout<<fileQueryNum<<" queries in "<<data_name+"_qg.txt"<<endl;
+	if(iteration_times>fileQueryNum){
+		std::cerr<<"Warning: iteration time is larger than query file size."<<endl;
+	}
+	iteration_times=min(iteration_times,fileQueryNum);
+	std::cout<<"Use first "<<iteration_times<<" queries"<<endl;
+#endif
 
 	/*iterations*/
 	for (int times = 1; times <= iteration_times; times++) {
@@ -2724,7 +2827,14 @@ void solve_VWSTP(string data_name, string save_name, int iteration_times, int V,
 		std::unordered_set<int> sampled_skill_vertices;
 		bool sampled_skill_vertices_is_feasible = false;
 
-
+#ifdef READ_FROM_FILE
+		int sampleSize;
+		qgFile>>sampleSize;
+		for(int i=0,groupID;i<sampleSize;++i){
+			qgFile>>groupID;
+			sampled_skill_vertices.insert(groupID);
+		}
+#else
 		if (V < read_graph.hash_of_vectors.size()) {
 			unordered_set<int> selected_vertices = graph_hash_of_mixed_weighted_breadth_first_search_a_fixed_number_of_vertices_in_unconnected_graphs_start_from_maxcpn(read_graph, V);
 			graph_hash_of_mixed_weighted small_read_graph = graph_hash_of_mixed_weighted_extract_subgraph_for_a_hash_of_vertices(read_graph, selected_vertices);
@@ -2771,7 +2881,7 @@ void solve_VWSTP(string data_name, string save_name, int iteration_times, int V,
 				sampled_skill_vertices = randomly_sample_vertex_groups_by_sizes(T, read_graph_skill_vertices, read_group_graph); /*randomly sample vertex groups by sizes*/
 			}
 		}
-
+#endif
 
 		/*solve instance in each maximal component*/
 		double time_GKA = 0, time_LANCET = 0;
@@ -3248,7 +3358,10 @@ int main()
 	graph_hash_of_mixed_weighted_turn_on_value = 1e3;
 	graph_hash_of_mixed_weighted_turn_off_value = 1e1;
 
-	parallel_experiments();
+	//parallel_experiments();
+
+	solve_VWGSTP("toy","toy_solve_g.csv",20,-1,-1,1,3,1,1,1,1,1,1,1,1,1,1,1,1,false);// if read from graph option is on, lambda should be 1 because graph files do not have vertex weight
+	solve_VWSTP("toy","toy_solve.csv",20,-1,-1,1,false);
 
 	auto end = std::chrono::high_resolution_clock::now();
 	double runningtime = std::chrono::duration_cast<std::chrono::nanoseconds>(end - begin).count() / 1e9; // s
