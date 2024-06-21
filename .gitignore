@@ -1,0 +1,7 @@
+build/
+cmake-build-debug/
+.cache/
+*.zip
+*.txt
+*.csv
+!toy!*

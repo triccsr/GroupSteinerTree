@@ -2360,13 +2360,6 @@ void solve_VWGSTP(string data_name, string save_name, int iteration_times, int V
 		"cost_exIhlerAP,time_exIhlerAP,cost_FastAPPP,time_FastAPPP,cost_Basic,time_Basic,cost_BasicPlus,time_BasicPlus,maximum_return_app_ratio" << endl;
 
 	//input queries or sample skill vertices when reading from file
-#ifdef READ_FROM_FILE
-	ifstream qgFile(data_name+"_qg.txt",ios::in);
-	if(!qgFile.is_open()){
-		std::cerr<<"Error: Option READ_FROM_FILE is on, but cannot find file"<<data_name+"_qg.txt, exiting."<<endl;
-		exit(1);
-	}
-#endif
 
 
 	/*read raw dataset*/
@@ -2426,10 +2419,17 @@ void solve_VWGSTP(string data_name, string save_name, int iteration_times, int V
 
 	//query file
 #ifdef READ_FROM_FILE
-	std::cerr<<"Info: Read from file mode is on, arguments V,T,vertex_groups_sample_method are useless in read from file mode."<<endl;
+	string fileName=vertex_groups_sample_method?(data_name+"_u_qg.txt"):(data_name+"_w_qg.txt");
+	ifstream qgFile(fileName);
+
+	if(!qgFile.is_open()){
+		std::cerr<<"Error: cannot open query file "<<fileName<<", exiting"<<endl;
+		exit(1);
+	}
+	std::cerr<<"Info: Read from file mode is on, arguments V,T,lambda are useless in read from file mode."<<endl;
 	int fileQueryNum;
 	qgFile>>fileQueryNum;
-	std::cout<<fileQueryNum<<" queries in "<<data_name+"_qg.txt"<<endl;
+	std::cout<<fileQueryNum<<" queries in "<<fileName<<endl;
 	if(iteration_times>fileQueryNum){
 		std::cerr<<"Warning: iteration time is larger than query file size."<<endl;
 	}
@@ -2748,14 +2748,6 @@ void solve_VWSTP(string data_name, string save_name, int iteration_times, int V,
 	outputFile.open(save_name);
 	outputFile << "V,T,lambda,cost_LANCET,time_LANCET,cost_GKA,time_GKA" << endl;
 
-#ifdef READ_FROM_FILE
-	ifstream qgFile(data_name+"_qg.txt",ios::in);
-	if(!qgFile.is_open()){
-		std::cerr<<"Error: cannot open query file "<<data_name+"_qg.txt, exiting"<<endl;
-		exit(1);
-	}
-#endif
-
 	/*read raw dataset*/
 	graph_hash_of_mixed_weighted read_graph, read_group_graph;
 #ifdef READ_FROM_FILE
@@ -2802,10 +2794,17 @@ void solve_VWSTP(string data_name, string save_name, int iteration_times, int V,
 
 	//query file
 #ifdef READ_FROM_FILE
-	std::cerr<<"Info: Read from file mode is on, arguments V,T,lambda,vertex_groups_sample_method are useless in read from file mode."<<endl;
+	string fileName=vertex_groups_sample_method?(data_name+"_u_qg.txt"):(data_name+"_w_qg.txt");
+	ifstream qgFile(fileName);
+
+	if(!qgFile.is_open()){
+		std::cerr<<"Error: cannot open query file "<<fileName<<", exiting"<<endl;
+		exit(1);
+	}
+	std::cerr<<"Info: Read from file mode is on, arguments V,T,lambda are useless in read from file mode."<<endl;
 	int fileQueryNum;
 	qgFile>>fileQueryNum;
-	std::cout<<fileQueryNum<<" queries in "<<data_name+"_qg.txt"<<endl;
+	std::cout<<fileQueryNum<<" queries in "<<fileName<<endl;
 	if(iteration_times>fileQueryNum){
 		std::cerr<<"Warning: iteration time is larger than query file size."<<endl;
 	}
@@ -2957,6 +2956,9 @@ void solve_VWSTP(string data_name, string save_name, int iteration_times, int V,
 
 
 	}
+#ifdef READ_FROM_FILE
+	qgFile.close();
+#endif
 
 }
 #pragma endregion solve_VWSTP
@@ -3359,9 +3361,12 @@ int main()
 	graph_hash_of_mixed_weighted_turn_off_value = 1e1;
 
 	//parallel_experiments();
+	solve_VWGSTP("toy","toy_solve_u_g.csv",20,-1,-1,1,3,1,1,1,1,1,1,1,1,1,1,1,1,true);// if read from graph option is on, lambda should be 1 because graph files do not have vertex weight
+	solve_VWSTP("toy","toy_solve_u.csv",20,-1,-1,1,true);
 
-	solve_VWGSTP("toy","toy_solve_g.csv",20,-1,-1,1,3,1,1,1,1,1,1,1,1,1,1,1,1,false);// if read from graph option is on, lambda should be 1 because graph files do not have vertex weight
-	solve_VWSTP("toy","toy_solve.csv",20,-1,-1,1,false);
+
+	solve_VWGSTP("toy","toy_solve_w_g.csv",20,-1,-1,1,3,1,1,1,1,1,1,1,1,1,1,1,1,false);// if read from graph option is on, lambda should be 1 because graph files do not have vertex weight
+	solve_VWSTP("toy","toy_solve_w.csv",20,-1,-1,1,false);
 
 	auto end = std::chrono::high_resolution_clock::now();
 	double runningtime = std::chrono::duration_cast<std::chrono::nanoseconds>(end - begin).count() / 1e9; // s
